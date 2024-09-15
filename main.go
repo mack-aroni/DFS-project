@@ -1,37 +1,38 @@
 package main
 
 import (
-	"fmt"
 	"log"
 
 	"github.com/mack-aroni/DFS-project/p2p"
 )
 
-func OnPeer(peer p2p.Peer) error {
-	fmt.Println("doing some logic with peer outside of TCPTransport")
-	return nil
+func makeServer(listenAddr string, nodes ...string) *FileServer {
+	tcpTransportOpts := p2p.TCPTransportOpts{
+		ListenAddr: listenAddr,
+		Handshake:  p2p.NOPHandshakeFunc,
+		Decoder:    p2p.DefaultDecoder{},
+		// onpeer
+	}
+	tcpTransport := p2p.NewTCPTransport(tcpTransportOpts)
+
+	fileServerOpts := FileServerOpts{
+		StorageRoot:       listenAddr + "_network",
+		PathTransformFunc: CASPathTransformFunc,
+		Transport:         tcpTransport,
+		BootstrapNodes:    nodes,
+	}
+
+	return NewFileServer(fileServerOpts)
 }
 
 func main() {
-	tcpOpts := p2p.TCPTransportOpts{
-		ListenAddr: ":3000",
-		Handshake:  p2p.NOPHandshakeFunc,
-		Decoder:    p2p.DefaultDecoder{},
-		OnPeer:     OnPeer,
-	}
-
-	tr := p2p.NewTCPTransport(tcpOpts)
+	s1 := makeServer(":3000", "")
+	s2 := makeServer(":4000", ":3000")
 
 	go func() {
-		for {
-			msg := <-tr.Consume()
-			fmt.Printf("%+v\n", msg)
-		}
+		log.Fatal(s1.Start())
 	}()
 
-	if err := tr.ListenAndAccept(); err != nil {
-		log.Fatal(err)
-	}
+	s2.Start()
 
-	select {}
 }

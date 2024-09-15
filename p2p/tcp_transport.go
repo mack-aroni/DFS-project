@@ -1,9 +1,9 @@
 package p2p
 
 import (
+	"errors"
 	"fmt"
 	"net"
-	"sync"
 )
 
 // TCPPeer represents the remote node over a TCP established connection
@@ -38,9 +38,6 @@ type TCPTransport struct {
 	TCPTransportOpts
 	listener net.Listener
 	rpcCh    chan RPC
-
-	mu    sync.RWMutex
-	peers map[net.Addr]Peer
 }
 
 // TCPTransport constructor
@@ -51,10 +48,27 @@ func NewTCPTransport(opts TCPTransportOpts) *TCPTransport {
 	}
 }
 
-// Consume implements Transport interface,
-// returns a read-only channel for messages from another Peer
+// Consume implements Transport interface, which returns
+// a read-only channel for messages from another Peer
 func (t *TCPTransport) Consume() <-chan RPC {
 	return t.rpcCh
+}
+
+// Close implements Transport interface
+func (t *TCPTransport) Close() error {
+	return t.listener.Close()
+}
+
+// Dial implements Transport interface
+func (t *TCPTransport) Dial(addr string) error {
+	conn, err := net.Dial("tcp", addr)
+	if err != nil {
+		return err
+	}
+
+	go t.handleConn(conn, true)
+
+	return nil
 }
 
 // TCPTransport listens over TCP network for connections
@@ -68,6 +82,8 @@ func (t *TCPTransport) ListenAndAccept() error {
 
 	go t.startAcceptLoop()
 
+	fmt.Printf("TCP transport listening on port: %s\n", t.ListenAddr)
+
 	return nil
 }
 
@@ -75,13 +91,18 @@ func (t *TCPTransport) ListenAndAccept() error {
 func (t *TCPTransport) startAcceptLoop() {
 	for {
 		conn, err := t.listener.Accept()
+
+		if errors.Is(err, net.ErrClosed) {
+			return
+		}
+
 		if err != nil {
 			fmt.Printf("TCP accept error: %s\n", err)
 		}
 
 		fmt.Printf("Handling new incoming connection: %+v\n", conn)
 
-		go t.handleConn(conn)
+		go t.handleConn(conn, false)
 	}
 }
 
@@ -90,7 +111,7 @@ type Temp struct {
 }
 
 // Directly handles creating new TCPPeer from a connection
-func (t *TCPTransport) handleConn(conn net.Conn) {
+func (t *TCPTransport) handleConn(conn net.Conn, outbound bool) {
 	var err error
 
 	defer func() {
@@ -98,7 +119,7 @@ func (t *TCPTransport) handleConn(conn net.Conn) {
 		conn.Close()
 	}()
 
-	peer := NewTCPPeer(conn, true)
+	peer := NewTCPPeer(conn, outbound)
 
 	if err := t.Handshake(peer); err != nil {
 		return
