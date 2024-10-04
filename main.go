@@ -1,7 +1,10 @@
 package main
 
 import (
+	"bytes"
+	"fmt"
 	"log"
+	"time"
 
 	"github.com/mack-aroni/DFS-project/p2p"
 )
@@ -35,7 +38,26 @@ func main() {
 	go func() {
 		log.Fatal(s1.Start())
 	}()
+	time.Sleep(1 * time.Second)
 
-	s2.Start()
+	go s2.Start()
+	time.Sleep(1 * time.Second)
 
+	for i := 0; i < 10; i++ {
+		data := bytes.NewReader([]byte("my big data file here!"))
+		s2.StoreFile(fmt.Sprintf("myprivatedata_%d", i), data)
+		time.Sleep(500 * time.Millisecond)
+	}
+
+	// r, err := s2.Get("myprivatedata")
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
+	// b, err := io.ReadAll(r)
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
+	// fmt.Println(string(b))
+
+	select {}
 }
