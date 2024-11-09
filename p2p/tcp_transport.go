@@ -26,6 +26,7 @@ func NewTCPPeer(conn net.Conn, outbound bool) *TCPPeer {
 	}
 }
 
+// CloseStream implements the Peer interface
 func (p *TCPPeer) CloseStream() {
 	p.wg.Done()
 }
